@@ -85,10 +85,10 @@ function renderQuickLinks()
 	global $quick_links;
 	if (! isset ($quick_links))
 		$quick_links = getConfiguredQuickLinks();
-	echo '<ul class="qlinks">';
+	// echo '<ul class="qlinks">';
 	foreach ($quick_links as $link)
 		echo '<li><a href="' . $link['href'] . '">' . str_replace (' ', '&nbsp;', $link['title']) . '</a></li>';
-	echo '</ul>';
+	//echo '</ul>';
 }
 
 function renderInterfaceHTML ($pageno, $tabno, $payload)
@@ -98,21 +98,88 @@ function renderInterfaceHTML ($pageno, $tabno, $payload)
 <html lang="en">
  <head><title><?php echo getTitle ($pageno); ?></title>
 <?php printPageHeaders(); ?>
-  <link href="css/bootstrap.min.css" rel="stylesheet" media="screen">
+  <link href="css/bootstrap.min.css" rel="stylesheet" myPredicates="screen">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link href="assets/css/bootstrap-responsive.css" rel="stylesheet">
+  <style type="text/css">
+
+      /* Sticky footer styles
+      -------------------------------------------------- */
+
+      html,
+      body {
+        height: 100%;
+        /* The html and body elements cannot have any padding or margin. */
+      }
+
+      /* Wrapper for page content to push down footer */
+      #wrap {
+        min-height: 100%;
+        height: auto !important;
+        height: 100%;
+        /* Negative indent footer by it's height */
+        margin: 0 auto -60px;
+      }
+
+      /* Set the fixed height of the footer here */
+      #push,
+      #footer {
+        height: 60px;
+      }
+      #footer {
+        background-color: #f5f5f5;
+      }
+
+      /* Lastly, apply responsive CSS fixes as necessary */
+      @media (max-width: 767px) {
+        #footer {
+          margin-left: -20px;
+          margin-right: -20px;
+          padding-left: 20px;
+          padding-right: 20px;
+        }
+      }
+    </style>
  </head>
  <body>
-  <div class="maintable">
-   <div class="mainheader">
-    <div style="float: right" class=greeting><a href='index.php?page=myaccount&tab=default'><?php global $remote_displayname; echo $remote_displayname ?></a> [ <a href='?logout'>logout</a> ]</div>
- <?php echo getConfigVar ('enterprise') ?> RackTables <a href="http://racktables.org" title="Visit RackTables site"><?php echo CODE_VERSION ?></a><?php renderQuickLinks() ?>
+
+ <div class="navbar navbar-inverse navbar-fixed-top">
+  <div class="navbar-inner">
+  	<div class="container">
+  		  <button type="button" class="btn btn-navbar" data-toggle="collapse" data-target=".nav-collapse">
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+          </button>
+    <a class="brand" href="#">Racktables</a>
+    <div class="nav-collapse nav">
+    <ul class="nav">
+    	<?php renderQuickLinks() ?>
+    	<li><a href='?logout'>Logout</a></li>
+    </ul>
+    <?php showPathAndSearch ($pageno); ?>
     </div>
-    <div class="menubar"><?php showPathAndSearch ($pageno); ?></div>
-    <div class="tabbar"><?php showTabs ($pageno, $tabno); ?></div>
-    <div class="msgbar"><?php showMessageOrError(); ?></div>
-    <div class="pagebar"><?php echo $payload; ?></div>
+    </div>
    </div>
+  </div>
+ <div class="wrap">
+
+  <div class="container">
+  	<div>
+    <div><?php showTabs ($pageno, $tabno); ?></div>
+    <div><?php showMessageOrError(); ?></div>
+    <div><?php echo $payload; ?></div>
+    <div><a href='index.php?page=myaccount&tab=default'><?php global $remote_displayname; echo $remote_displayname ?></a> </div>
+    <div id="push"></div>
+</div>
+  </div>
+     </div>
+   <div id="footer">
+      <div class="container">
+        <p class="muted credit"><?php echo getConfigVar ('enterprise') ?> RackTables <a href="http://racktables.org" title="Visit RackTables site"><?php echo CODE_VERSION ?></a>.</p>
+      </div>
+    </div>
+
   <script src="js/bootstrap.min.js"></script>
  </body>
 </html>
@@ -5951,14 +6018,14 @@ function showPathAndSearch ($pageno)
 		$items[] = $item;
 	}
 	// Search form.
-	echo "<div class='searchbox' style='float:right'>";
-	echo "<form name=search method=get>";
+	//echo "<div>";
+	echo '<form class="navbar-form form-search pull-right" name="search" method="get">';
 	echo '<input type=hidden name=page value=search>';
 	// This input will be the first, if we don't add ports or addresses.
-	echo "<label>Search:<input type=text name=q size=20 tabindex=1000></label></form></div>";
+	echo '<input type="text" name=q size=20 tabindex=1000 class="input-medium search-query"><button type="submit" class="btn">Search</button></form>';
 
 	// Path (breadcrumbs)
-	echo implode(' : ', array_reverse ($items));
+	//echo implode(' : ', array_reverse ($items));
 }
 
 function getTitle ($pageno)
@@ -5975,7 +6042,7 @@ function showTabs ($pageno, $tabno)
 	global $tab, $page, $trigger;
 	if (!isset ($tab[$pageno]['default']))
 		return;
-	echo "<div class=greynavbar><ul id=foldertab style='margin-bottom: 0px; padding-top: 10px;'>";
+	echo "<ul>";
 	foreach ($tab[$pageno] as $tabidx => $tabtitle)
 	{
 		// Hide forbidden tabs.
@@ -5988,7 +6055,7 @@ function showTabs ($pageno, $tabno)
 			continue;
 		if ($tabidx == $tabno)
 			$tabclass = 'current'; // override any class for an active selection
-		echo "<li><a class=${tabclass}";
+		echo "<li><a>";
 		echo " href='index.php?page=${pageno}&tab=${tabidx}";
 		$args = array();
 		fillBypassValues ($pageno, $args);
@@ -5997,7 +6064,7 @@ function showTabs ($pageno, $tabno)
 
 		echo "'>${tabtitle}</a></li>\n";
 	}
-	echo "</ul></div>";
+	echo "</ul>";
 }
 
 // Arg is path page number, which can be different from the primary page number,
