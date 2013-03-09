@@ -93,23 +93,28 @@ function renderQuickLinks()
 
 function renderInterfaceHTML ($pageno, $tabno, $payload)
 {
-?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
-<head><title><?php echo getTitle ($pageno); ?></title>
+?>
+<!DOCTYPE html>
+<html lang="en">
+ <head><title><?php echo getTitle ($pageno); ?></title>
 <?php printPageHeaders(); ?>
-</head>
-<body>
-<div class="maintable">
- <div class="mainheader">
-  <div style="float: right" class=greeting><a href='index.php?page=myaccount&tab=default'><?php global $remote_displayname; echo $remote_displayname ?></a> [ <a href='?logout'>logout</a> ]</div>
+  <link href="css/bootstrap.min.css" rel="stylesheet" media="screen">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="assets/css/bootstrap-responsive.css" rel="stylesheet">
+ </head>
+ <body>
+  <div class="maintable">
+   <div class="mainheader">
+    <div style="float: right" class=greeting><a href='index.php?page=myaccount&tab=default'><?php global $remote_displayname; echo $remote_displayname ?></a> [ <a href='?logout'>logout</a> ]</div>
  <?php echo getConfigVar ('enterprise') ?> RackTables <a href="http://racktables.org" title="Visit RackTables site"><?php echo CODE_VERSION ?></a><?php renderQuickLinks() ?>
- </div>
- <div class="menubar"><?php showPathAndSearch ($pageno); ?></div>
- <div class="tabbar"><?php showTabs ($pageno, $tabno); ?></div>
- <div class="msgbar"><?php showMessageOrError(); ?></div>
- <div class="pagebar"><?php echo $payload; ?></div>
-</div>
-</body>
+    </div>
+    <div class="menubar"><?php showPathAndSearch ($pageno); ?></div>
+    <div class="tabbar"><?php showTabs ($pageno, $tabno); ?></div>
+    <div class="msgbar"><?php showMessageOrError(); ?></div>
+    <div class="pagebar"><?php echo $payload; ?></div>
+   </div>
+  <script src="js/bootstrap.min.js"></script>
+ </body>
 </html>
 <?php
 }
