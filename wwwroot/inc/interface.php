@@ -177,6 +177,7 @@ function renderInterfaceHTML ($pageno, $tabno, $payload)
    </div>
   <div class="container-fluid">
    <div class="row-fluid">
+   	<?php showTabs ($pageno, $tabno); ?></div>
     <?php echo $payload; ?>
       <div><a href='index.php?page=myaccount&tab=default'><?php global $remote_displayname; echo $remote_displayname ?></a> </div>
    </div>
@@ -6052,7 +6053,7 @@ function showTabs ($pageno, $tabno)
 	global $tab, $page, $trigger;
 	if (!isset ($tab[$pageno]['default']))
 		return;
-	echo "<ul>";
+	echo '<div><ul class="nav nav-tabs">';
 	foreach ($tab[$pageno] as $tabidx => $tabtitle)
 	{
 		// Hide forbidden tabs.
@@ -6064,8 +6065,8 @@ function showTabs ($pageno, $tabno)
 		elseif (!strlen ($tabclass = call_user_func ($trigger[$pageno][$tabidx])))
 			continue;
 		if ($tabidx == $tabno)
-			$tabclass = 'current'; // override any class for an active selection
-		echo "<li><a";
+			$tabclass = 'active'; // override any class for an active selection
+		echo '<li class="' . $tabclass . '"><a';
 		echo " href='index.php?page=${pageno}&tab=${tabidx}";
 		$args = array();
 		fillBypassValues ($pageno, $args);
@@ -6074,7 +6075,7 @@ function showTabs ($pageno, $tabno)
 
 		echo "'>${tabtitle}</a></li>\n";
 	}
-	echo "</ul>";
+	echo "</ul></div>";
 }
 
 // Arg is path page number, which can be different from the primary page number,
