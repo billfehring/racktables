@@ -98,9 +98,8 @@ function renderInterfaceHTML ($pageno, $tabno, $payload)
 <html lang="en">
  <head><title><?php echo getTitle ($pageno); ?></title>
 <?php printPageHeaders(); ?>
-  <link href="css/bootstrap.min.css" rel="stylesheet" myPredicates="screen">
+  <link href="css/bootstrap.min.css" rel="stylesheet">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link href="assets/css/bootstrap-responsive.css" rel="stylesheet">
   <style type="text/css">
 
       /* Sticky footer styles
@@ -139,47 +138,57 @@ function renderInterfaceHTML ($pageno, $tabno, $payload)
           padding-right: 20px;
         }
       }
+
+
+
+      /* Custom page CSS
+      -------------------------------------------------- */
+      /* Not required for template or sticky footer method. */
+
+      .container .credit {
+        margin: 20px 0;
+      }
+
+      code {
+        font-size: 80%;
+      }
+
     </style>
  </head>
  <body>
-
- <div class="navbar navbar-inverse navbar-fixed-top">
-  <div class="navbar-inner">
-  	<div class="container">
-  		  <button type="button" class="btn btn-navbar" data-toggle="collapse" data-target=".nav-collapse">
-            <span class="icon-bar"></span>
-            <span class="icon-bar"></span>
-            <span class="icon-bar"></span>
-          </button>
-    <a class="brand" href="#">Racktables</a>
-    <div class="nav-collapse nav">
-    <ul class="nav">
-    	<?php renderQuickLinks() ?>
-    	<li><a href='?logout'>Logout</a></li>
-    </ul>
-    <?php showPathAndSearch ($pageno); ?>
-    </div>
+  <div class="wrap" style="padding-top: 60px;">
+   <div class="navbar navbar-inverse navbar-fixed-top">
+    <div class="navbar-inner">
+     <div class="container">
+      <button type="button" class="btn btn-navbar" data-toggle="collapse" data-target=".nav-collapse">
+       <span class="icon-bar"></span>
+       <span class="icon-bar"></span>
+       <span class="icon-bar"></span>
+      </button>
+      <a class="brand" href="#">Racktables</a>
+      <div class="nav nav-collapse">
+       <ul class="nav">
+       	<?php renderQuickLinks() ?>
+       </ul>
+      </div>
+     <ul class="nav pull-right"><li><a href='?logout'>Logout</a></li></ul><?php showPathAndSearch ($pageno); ?>
+     </div>
     </div>
    </div>
+  <div class="container-fluid">
+   <div class="row-fluid">
+    <?php echo $payload; ?>
+      <div><a href='index.php?page=myaccount&tab=default'><?php global $remote_displayname; echo $remote_displayname ?></a> </div>
+   </div>
   </div>
- <div class="wrap">
 
-  <div class="container">
-  	<div>
-    <div><?php showTabs ($pageno, $tabno); ?></div>
-    <div><?php showMessageOrError(); ?></div>
-    <div><?php echo $payload; ?></div>
-    <div><a href='index.php?page=myaccount&tab=default'><?php global $remote_displayname; echo $remote_displayname ?></a> </div>
-    <div id="push"></div>
-</div>
+  <div id="push"></div>
+ </div>
+  <div id="footer">
+   <div class="container">
+    <p class="muted credit"><?php echo getConfigVar ('enterprise') ?> RackTables <a href="http://racktables.org" title="Visit RackTables site"><?php echo CODE_VERSION ?></a>.</p>
+   </div>
   </div>
-     </div>
-   <div id="footer">
-      <div class="container">
-        <p class="muted credit"><?php echo getConfigVar ('enterprise') ?> RackTables <a href="http://racktables.org" title="Visit RackTables site"><?php echo CODE_VERSION ?></a>.</p>
-      </div>
-    </div>
-
   <script src="js/bootstrap.min.js"></script>
  </body>
 </html>
@@ -189,12 +198,12 @@ function renderInterfaceHTML ($pageno, $tabno, $payload)
 // Main menu.
 function renderIndexItem ($ypageno)
 {
-	echo (! permitted ($ypageno)) ? "          <td>&nbsp;</td>\n" :
-		"          <td>\n" .
-		"            <h1><a href='" . makeHref (array ('page' => $ypageno)) . "'>" .
+	echo (!permitted($ypageno)) ? "<td>&nbsp;</td>\n" :
+		"<td>\n" .
+		"<h1><a href='" . makeHref (array ('page' => $ypageno)) . "'>" .
 		getPageName ($ypageno) . "<br>\n" . getImageHREF ($ypageno) .
 		"</a></h1>\n" .
-		"          </td>\n";
+		"</td>\n";
 }
 
 function renderIndex ()
@@ -202,10 +211,11 @@ function renderIndex ()
 	global $indexlayout;
 ?>
 <table border=0 cellpadding=0 cellspacing=0 width='100%'>
-	<tr>
-		<td>
-			<div style='text-align: center; margin: 10px; '>
-			<table width='100%' cellspacing=0 cellpadding=20 class=mainmenu border=0>
+<tr>
+<td>
+<div style='text-align: center'>
+<table width='100%' cellspacing=0 cellpadding=20 border=0>
+
 <?php
 foreach ($indexlayout as $row)
 {
@@ -1225,7 +1235,7 @@ function renderObject ($object_id)
 	if (strlen ($info['comment']))
 	{
 		startPortlet ('Comment');
-		echo '<div class=commentblock>' . string_insert_hrefs ($info['comment']) . '</div>';
+		echo '<div>' . string_insert_hrefs ($info['comment']) . '</div>';
 		finishPortlet ();
 	}
 
@@ -1765,7 +1775,7 @@ function showMessageOrError ()
 		if (!isset ($record['c']) or !isset ($msginfo[$record['c']]))
 		{
 			$prefix = isset ($record['c']) ? $record['c'] . ': ' : '';
-			echo "<div class=msg_neutral>(${prefix}this message was lost)</div>";
+			echo "<div>(${prefix}this message was lost)</div>";
 			continue;
 		}
 		if (isset ($record['a']))
@@ -2540,7 +2550,7 @@ function renderIPNetwork ($id)
 	if (strlen ($range['comment']))
 	{
 		startPortlet ('Comment');
-		echo '<div class=commentblock>' . string_insert_hrefs (htmlspecialchars ($range['comment'], ENT_QUOTES, 'UTF-8')) . '</div>';
+		echo '<div>' . string_insert_hrefs (htmlspecialchars ($range['comment'], ENT_QUOTES, 'UTF-8')) . '</div>';
 		finishPortlet ();
 	}
 
@@ -5235,7 +5245,7 @@ function renderNewEntityTags ($for_realm = '')
 		echo "No tags defined";
 		return;
 	}
-	echo '<div class=tagselector><table border=0 align=center cellspacing=0 class="tagtree">';
+	echo '<div><table border=0 align=center cellspacing=0 class="tagtree">';
 	printTagCheckboxTable ('taglist', array(), array(), $tagtree, $for_realm);
 	echo '</table></div>';
 }
@@ -6019,10 +6029,10 @@ function showPathAndSearch ($pageno)
 	}
 	// Search form.
 	//echo "<div>";
-	echo '<form class="navbar-form form-search pull-right" name="search" method="get">';
-	echo '<input type=hidden name=page value=search>';
+	echo '<form class="navbar-search pull-right" name="search" method="get">';
+	echo '<input type="hidden" name="page" value="search">';
 	// This input will be the first, if we don't add ports or addresses.
-	echo '<input type="text" name=q size=20 tabindex=1000 class="input-medium search-query"><button type="submit" class="btn">Search</button></form>';
+	echo '<input type="text" name=q size=20 tabindex=1000 class="span2 search-query" placeholder="Search"></form>';
 
 	// Path (breadcrumbs)
 	//echo implode(' : ', array_reverse ($items));
@@ -6055,7 +6065,7 @@ function showTabs ($pageno, $tabno)
 			continue;
 		if ($tabidx == $tabno)
 			$tabclass = 'current'; // override any class for an active selection
-		echo "<li><a>";
+		echo "<li><a";
 		echo " href='index.php?page=${pageno}&tab=${tabidx}";
 		$args = array();
 		fillBypassValues ($pageno, $args);
