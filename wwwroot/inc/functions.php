@@ -2685,53 +2685,6 @@ function formatEntityName ($name)
 	return 'invalid';
 }
 
-// Display hrefs for all of a file's parents. If scissors are requested,
-// prepend cutting button to each of them.
-function serializeFileLinks ($links, $scissors = FALSE)
-{
-	$comma = '';
-	$ret = '';
-	foreach ($links as $link_id => $li)
-	{
-		switch ($li['entity_type'])
-		{
-			case 'ipv4net':
-				$params = "page=ipv4net&id=";
-				break;
-			case 'ipv6net':
-				$params = "page=ipv6net&id=";
-				break;
-			case 'ipv4rspool':
-				$params = "page=ipv4rspool&pool_id=";
-				break;
-			case 'ipv4vs':
-				$params = "page=ipv4vs&vs_id=";
-				break;
-			case 'object':
-				$params = "page=object&object_id=";
-				break;
-			case 'rack':
-				$params = "page=rack&rack_id=";
-				break;
-			case 'location':
-				$params = "page=location&location_id=";
-				break;
-			case 'user':
-				$params = "page=user&user_id=";
-				break;
-		}
-		$ret .= $comma;
-		if ($scissors)
-		{
-			$ret .= "<a href='" . makeHrefProcess(array('op'=>'unlinkFile', 'link_id'=>$link_id)) . "'";
-			$ret .= getImageHREF ('cut') . '</a> ';
-		}
-		$ret .= sprintf("<a href='index.php?%s%s'>%s</a>", $params, $li['entity_id'], $li['name']);
-		$comma = '<br>';
-	}
-	return $ret;
-}
-
 // Convert filesize to appropriate unit and make it human-readable
 function formatFileSize ($bytes)
 {
@@ -2871,6 +2824,11 @@ function cookOptgroups ($recordList, $object_type_id = 0, $existing_value = 0)
 			}
 	}
 	return $ret;
+}
+
+function dos2unix ($text)
+{
+	return str_replace ("\r\n", "\n", $text);
 }
 
 function unix2dos ($text)
@@ -3925,7 +3883,7 @@ function produceUplinkPorts ($domain_vlanlist, $portlist, $object_id)
 	foreach ($portlist as $port_name => $port)
 		if ($port['vst_role'] != 'uplink')
 			foreach ($port['allowed'] as $vlan_id)
-				if (!in_array ($vlan_id, $employed))
+				if (array_key_exists ($vlan_id, $domain_vlanlist) && !in_array ($vlan_id, $employed))
 					$employed[] = $vlan_id;
 
 	foreach ($portlist as $port_name => $port)
@@ -4446,7 +4404,7 @@ function recalc8021QPorts ($switch_id)
 	// queue changes in D-config of local switch
 	if ($changed = replace8021QPorts ('desired', $switch_id, $before, $order))
 	{
-		touchVLANSwitch ($portinfo['remote_object_id']);
+		touchVLANSwitch ($switch_id);
 		$ret['switches'] ++;
 		$ret['ports'] += $changed;
 	}
@@ -4877,12 +4835,13 @@ function searchEntitiesByText ($terms)
 			$summary['user'] = getAccountSearchResult ($terms);
 			$summary['file'] = getFileSearchResult ($terms);
 			$summary['rack'] = getRackSearchResult ($terms);
+			$summary['location'] = getLocationSearchResult ($terms);
 			$summary['vlan'] = getVLANSearchResult ($terms);
 		}
 	}
 	# Filter search results in a way in some realms to omit records, which the
 	# user would not be able to browse anyway.
-	foreach (array ('object', 'ipv4net', 'ipv6net', 'ipv4rspool', 'ipv4vs', 'file', 'rack') as $realm)
+	foreach (array ('object', 'ipv4net', 'ipv6net', 'ipv4rspool', 'ipv4vs', 'file', 'rack', 'location') as $realm)
 		if (isset ($summary[$realm]))
 			foreach ($summary[$realm] as $key => $record)
 				if (! isolatedPermission ($realm, 'default', spotEntity ($realm, $record['id'])))
@@ -4907,9 +4866,19 @@ function buildSearchRedirectURL ($result_type, $record)
 		case 'ipv6addressbydq':
 		case 'ipv4addressbydescr':
 		case 'ipv6addressbydescr':
-			$next_page = strlen ($record['ip']) == 16 ? 'ipv6net' : 'ipv4net';
-			$id = isset ($record['net_id']) ? $record['net_id'] : getIPAddressNetworkId ($record['ip']);
-			$params['hl_ip'] = ip_format ($record['ip']);
+			$address = getIPAddress ($record['ip']);
+			if (isset ($address['allocs']) and count ($address['allocs']) == 1 and count ($address['vslist']) == 0 and count ($address['rsplist']) == 0)
+			{
+				$next_page = 'object';
+				$id = $address['allocs'][0]['object_id'];
+				$params['hl_ip'] = ip_format ($record['ip']);
+			}
+			else
+			{
+				$next_page = strlen ($record['ip']) == 16 ? 'ipv6net' : 'ipv4net';
+				$id = isset ($record['net_id']) ? $record['net_id'] : getIPAddressNetworkId ($record['ip']);
+				$params['hl_ip'] = ip_format ($record['ip']);
+			}
 			break;
 		case 'object':
 			if (isset ($record['by_port']) and 1 == count ($record['by_port']))
@@ -4935,7 +4904,9 @@ function buildSearchRedirectURL ($result_type, $record)
 	if (! isset ($key) || ! isset ($id))
 		return NULL;
 	$params[$key] = $id;
-	return buildRedirectURL ($next_page, 'default', $params);
+	if (isset ($_REQUEST['last_tab']) and isset ($_REQUEST['last_page']) and $next_page == $_REQUEST['last_page'])
+		$next_tab = assertStringArg('last_tab');
+	return buildRedirectURL ($next_page, isset ($next_tab) ? $next_tab : 'default', $params);
 }
 
 function getRackCodeWarnings ()
@@ -5157,7 +5128,7 @@ function setMessage ($type, $message, $direct_rendering)
 	elseif (isset ($script_mode) and $script_mode)
 	{
 		if ($type == 'warning' or $type == 'error')
-			file_put_contents ('php://stderr', strtoupper ($type) . ': ' . $message . "\n");
+			file_put_contents ('php://stderr', strtoupper ($type) . ': ' . strip_tags ($message) . "\n");
 	}
 	else
 	{
@@ -5872,6 +5843,34 @@ function arePortsCompatible ($portinfo_a, $portinfo_b)
 	return arePortTypesCompatible ($portinfo_a['oif_id'], $portinfo_b['oif_id']);
 }
 
+// returns HTML-formatted link to the given entity
+function mkCellA ($cell)
+{
+	global $page, $etype_by_pageno;
+	$cell_page = NULL;
+	foreach ($etype_by_pageno as $page_name => $realm)
+		if ($realm == $cell['realm'])
+		{
+			$cell_page = $page_name;
+			break;
+		}
+	if (! isset ($cell_page))
+		throw new RackTablesError ("Internal structure error in array \$etype_by_pageno. Page for realm '$realm' is not set", RackTablesError::INTERNAL);
+
+	if ($cell['realm'] == 'user')
+		$cell_key = $cell['userid'];
+	else
+		$cell_key = $cell['id'];
+
+	if (! isset ($page[$cell_page]['bypass']))
+		throw new RackTablesError ("Internal structure error. Bypass key for page '$cell_page' is not set", RackTablesError::INTERNAL);
+	else
+		$bypass_key = $page[$cell_page]['bypass'];
+
+	$title = array_first (formatEntityList (array ($cell)));
+	return '<a href="' . makeHref (array ('page' => $cell_page, $bypass_key => $cell_key)) . '">' . $title . '</a>';
+}
+
 // takes an array of cells,
 // returns an array indexed by cell id, values are simple text representation of a cell.
 // Intended to pass its return value to printSelect routine.
@@ -5889,6 +5888,10 @@ function formatEntityList ($list)
 				break;
 			case 'ipv4rspool':
 				$ret[$entity['id']] = $entity['name'];
+				break;
+			case 'ipv4net':
+			case 'ipv6net':
+				$ret[$entity['id']] = $entity['ip'] . '/' . $entity['mask'];
 				break;
 			default:
 				$ret[$entity['id']] = $entity['realm'] . '#' . $entity['id'];
@@ -5998,6 +6001,18 @@ function timestampFromDatetimestr ($s)
 		$tmp['tm_mday'],       # 1~31
 		$tmp['tm_year'] + 1900 # 0~n -> 1900~n
 	);
+}
+
+// Return TRUE, if the object belongs to specified type and has
+// specified attribute belonging to the given set of values.
+function checkTypeAndAttribute ($object_id, $type_id, $attr_id, $values)
+{
+	$object = spotEntity ('object', $object_id);
+	if ($object['objtype_id'] == $type_id)
+		foreach (getAttrValues ($object_id) as $record)
+			if ($record['id'] == $attr_id and in_array ($record['key'], $values))
+				return TRUE;
+	return FALSE;
 }
 
 ?>

@@ -198,7 +198,6 @@ $searchfunc = array
 (
 	'object' => array
 	(
-		'by_sticker' => 'getStickerSearchResults',
 		'by_port' => 'getPortSearchResults',
 		'by_attr' => 'getObjectAttrsSearchResults',
 		'by_iface' => 'getObjectIfacesSearchResults',
@@ -1446,11 +1445,11 @@ function getResidentRacksData ($object_id = 0, $fetch_rackdata = TRUE)
 	// and racks that it is 'Zero-U' mounted in
 	$result = usePreparedSelectBlade
 	(
-		'SELECT DISTINCT RS.rack_id FROM RackSpace RS LEFT JOIN EntityLink EL ON RS.object_id = EL.parent_entity_id AND EL.parent_entity_type = ? ' .
+		'SELECT DISTINCT RS.rack_id FROM RackSpace RS LEFT JOIN EntityLink EL ON RS.object_id = EL.parent_entity_id ' .
 		'WHERE RS.object_id = ? or EL.child_entity_id = ? ' .
 		'UNION ' .
 		"SELECT parent_entity_id AS rack_id FROM EntityLink where parent_entity_type = 'rack' AND child_entity_type = 'object' AND child_entity_id = ? " .
-		'ORDER BY rack_id', array ('rack', $object_id, $object_id, $object_id)
+		'ORDER BY rack_id', array ($object_id, $object_id, $object_id)
 	);
 	$rows = $result->fetchAll (PDO::FETCH_NUM);
 	unset ($result);
@@ -2651,19 +2650,58 @@ function getRackSearchResult ($terms)
 		$terms,
 		'name'
 	);
+	$bySticker = getStickerSearchResults ('Rack', $terms);
 	// Filter out dupes.
 	foreach ($byName as $res1)
 	{
 		foreach (array_keys ($byComment) as $key2)
 			if ($res1['id'] == $byComment[$key2]['id'])
 				unset ($byComment[$key2]);
-		foreach (array_keys ($byAssetNo) as $key4)
-			if ($res1['id'] == $byAssetNo[$key4]['id'])
-				unset ($byAssetNo[$key4]);
+		foreach (array_keys ($byAssetNo) as $key3)
+			if ($res1['id'] == $byAssetNo[$key3]['id'])
+				unset ($byAssetNo[$key3]);
+		foreach (array_keys ($bySticker) as $key4)
+			if ($res1['id'] == $bySticker[$key4]['id'])
+				unset ($bySticker[$key4]);
 	}
 	$ret = array();
-	foreach (array_merge ($byName, $byComment, $byAssetNo) as $row)
+	foreach (array_merge ($byName, $byComment, $byAssetNo, $bySticker) as $row)
 		$ret[$row['id']] = spotEntity ('rack', $row['id']);
+	return $ret;
+}
+
+function getLocationSearchResult ($terms)
+{
+	$byName = getSearchResultByField
+	(
+		'Location',
+		array ('id'),
+		'name',
+		$terms,
+		'name'
+	);
+	$byComment = getSearchResultByField
+	(
+		'Location',
+		array ('id'),
+		'comment',
+		$terms,
+		'name'
+	);
+	$bySticker = getStickerSearchResults ('Location', $terms);
+	// Filter out dupes.
+	foreach ($byName as $res1)
+	{
+		foreach (array_keys ($byComment) as $key2)
+			if ($res1['id'] == $byComment[$key2]['id'])
+				unset ($byComment[$key2]);
+		foreach (array_keys ($bySticker) as $key3)
+			if ($res1['id'] == $bySticker[$key3]['id'])
+				unset ($bySticker[$key3]);
+	}
+	$ret = array();
+	foreach (array_merge ($byName, $byComment, $bySticker) as $location)
+		$ret[$location['id']] = spotEntity ('location', $location['id']);
 	return $ret;
 }
 
@@ -2730,6 +2768,11 @@ function getObjectSearchResults ($what)
 			$ret[$objRecord['id']]['id'] = $objRecord['id'];
 			$ret[$objRecord['id']][$method] = $objRecord[$method];
 		}
+	foreach (getStickerSearchResults ('RackObject', $what) as $objRecord)
+	{
+		$ret[$objRecord['id']]['id'] = $objRecord['id'];
+		$ret[$objRecord['id']]['by_sticker'] = $objRecord['by_sticker'];			
+	}
 	return $ret;
 }
 
@@ -2755,28 +2798,29 @@ function getObjectAttrsSearchResults ($what)
 	return $ret;
 }
 
-// Look for EXACT value in stickers and return a list of pairs "object_id-attribute_id",
-// which matched. A partilar object_id could be returned more, than once, if it has
+// Search stickers and return a list of pairs "object_id-attribute_id",
+// which matched. A partilar object_id could be returned more than once, if it has
 // multiple matching stickers. Search is only performed on "string" attributes.
-function getStickerSearchResults ($what, $exactness = 0)
+function getStickerSearchResults ($tablename, $what)
 {
-	$stickers = getSearchResultByField
+	$result = usePreparedSelectBlade
 	(
-		'AttributeValue',
-		array ('object_id', 'attr_id'),
-		'string_value',
-		$what,
-		'object_id',
-		$exactness
+		'SELECT object_id, attr_id FROM AttributeValue AV ' .
+		"INNER JOIN ${tablename} O ON AV.object_id = O.id " .
+		'WHERE string_value LIKE ? ORDER BY object_id',
+		array ("%${what}%")
 	);
+
 	$map = getAttrMap();
 	$ret = array();
-	foreach ($stickers as $sticker)
-		if ($map[$sticker['attr_id']]['type'] == 'string')
+	while ($row = $result->fetch (PDO::FETCH_ASSOC))
+	{
+		if ($map[$row['attr_id']]['type'] == 'string')
 		{
-			$ret[$sticker['object_id']]['id'] = $sticker['object_id'];
-			$ret[$sticker['object_id']]['by_sticker'][] = $sticker['attr_id'];
+			$ret[$row['object_id']]['id'] = $row['object_id'];
+			$ret[$row['object_id']]['by_sticker'][] = $row['attr_id'];
 		}
+	}
 	return $ret;
 }
 
@@ -3017,8 +3061,12 @@ function getObjectParentCompat ()
 {
 	$result = usePreparedSelectBlade
 	(
-		'SELECT parent_objtype_id, child_objtype_id, d1.dict_value AS parent_name, d2.dict_value AS child_name FROM ' .
-		'ObjectParentCompat AS pc INNER JOIN Dictionary AS d1 ON pc.parent_objtype_id = d1.dict_key ' .
+		'SELECT parent_objtype_id, child_objtype_id, d1.dict_value AS parent_name, d2.dict_value AS child_name, ' .
+		'(SELECT COUNT(*) FROM EntityLink EL ' .
+		"LEFT JOIN Object PO ON (EL.parent_entity_id = PO.id AND EL.parent_entity_type = 'object') " .
+		"LEFT JOIN Object CO ON (EL.child_entity_id = CO.id AND EL.child_entity_type = 'object') " .
+		'WHERE PO.objtype_id = parent_objtype_id AND CO.objtype_id = child_objtype_id) AS count ' .
+		'FROM ObjectParentCompat AS pc INNER JOIN Dictionary AS d1 ON pc.parent_objtype_id = d1.dict_key ' .
 		'INNER JOIN Dictionary AS d2 ON pc.child_objtype_id = d2.dict_key ' .
 		'ORDER BY parent_name, child_name'
 	);
@@ -3250,7 +3298,7 @@ function getAttrMap ()
 
 	$result = usePreparedSelectBlade
 	(
-		'SELECT id, type, name, chapter_id, (SELECT dict_value FROM Dictionary WHERE dict_key = objtype_id) '.
+		'SELECT id, type, name, chapter_id, sticky, (SELECT dict_value FROM Dictionary WHERE dict_key = objtype_id) '.
 		'AS objtype_name, (SELECT name FROM Chapter WHERE id = chapter_id) ' .
 		'AS chapter_name, objtype_id, (SELECT COUNT(object_id) FROM AttributeValue AS av INNER JOIN Object AS o ' .
 		'ON av.object_id = o.id WHERE av.attr_id = Attribute.id AND o.objtype_id = AttributeMap.objtype_id) ' .
@@ -3272,6 +3320,7 @@ function getAttrMap ()
 		$application = array
 		(
 			'objtype_id' => $row['objtype_id'],
+			'sticky' => $row['sticky'],
 			'refcnt' => $row['refcnt'],
 		);
 		if ($row['type'] == 'dict')

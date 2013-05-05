@@ -141,6 +141,7 @@ th.sticker {
 
 td.tagbox {
 	text-align: left;
+	white-space: nowrap;
 }
 td.tagbox.selected {
 	background-color: #a0ffa0;
@@ -476,6 +477,7 @@ border-color: #ff8c00;
 div.commentblock {
 	white-space: pre-wrap;
 	text-align: left;
+	font-family: monospace;
 }
 
 .port_connected_none {
@@ -793,4 +795,15 @@ a.noclick {
 	white-space: pre-wrap;
 	font-family: monospace;
 	font-style: italic;
+}
+
+.varname {
+	font-family: "Courier New",Courier,monospace;
+	font-weight: bold;
+}
+
+.vardescr {
+	font-style: italic;
+	margin: 0 0;
+	font-size: 90%;
 }

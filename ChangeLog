@@ -1,4 +1,22 @@
-0.20.4
+0.20.5
+	bugfix: 500 server error if protocol was not specified in
+		terminal_settings subroutine
+	bugfix: Virtual Resources page threw exception if a hypervisor/resource pool
+		was not associated with a cluster (#823)
+	bugfix: contained objects were displayed without container's rackspace
+		allocation information (#825)
+	update: search improvements:
+		- redirect to object when search by IP lead to valid allocation
+		- if search result is same type of object, preserve opened tab
+		- display search query in form field when search return multiple results
+	update: handle EntityNotFoundException as redirect to main page and
+		show appropriate error message
+	update: prevent deletion of system-level attribute mappings (#771)
+	update: prevent deletion of object container compatibility rules
+		which are being used (#835)
+	update: use the monospace font family when displaying comments (#781) 
+	new feature: Rackcode filter for RDP-managed objects (#819)
+0.20.4 2013-04-15
 	bugfix: %GPASS% dictionary markers were ignored in selectboxes
 	bugfix: 802.1Q: better Force10 switches support
 	bugfix: 802.1Q: properly detect non-switched ports on Cisco NX-OS devices
@@ -14,6 +32,10 @@
 	bugfix: references to tags and files remained when a location was deleted
 		(#747)
 	bugfix: date/time attributes handling code had a bug (#719)
+	bugfix: 802.1Q recalc button wasn't turning switch in out-of-sync state
+	bugfix: searching attributes of locations & racks didn't work (#787)
+	bugfix: address a PHP warning (#809)
+	bugfix: release notes were not displayed during upgrade
 	update: vlan search results now include binded IP networks
 	update: make scaled rack thumb images sharp again
 	update: Cisco IOS 15.0 support
@@ -23,12 +45,16 @@
 		'802.1Q Ports' tab
 	update: assign IP addresses to objects whose type is Wireless (#755)
 	update: SNMP support for 3Com 4210 (#763), D-Link DES-3052 (#765),
-		Linksys SRW224G4 (#743), 
+		Linksys SRW224G4 (#743), Huawei S2700-52P-EI, HP J9137A (#791),
+		Dell PowerConnect 2824 (#815)
 	update: files may be linked to rows (#733)
 	update: prevent deletion of system-level attributes (#761)
 	update: hide controls in cacti tab if user doesn't have permission (#707)
-	new feature: configurable top-to-bottom units order in particular racks (#601)
+	update: configuration editor displays variable names along with descriptions
+	new feature: configurable top-to-bottom units order in particular racks
+		(#601)
 	new feature: overridable tag names display style (via CSS and plug-ins)
+	new feature: SAML is now supported, using SimpleSAMLphp API (#811)
 0.20.3 2012-12-19
 	bugfix: DB exception on ports linking (#699)
 0.20.2 2012-12-19

@@ -182,6 +182,9 @@ The DATETIME_FORMAT configuration option used in setting date and time output
 format now uses a different [1] syntax. During upgrade the option is reset to
 the default value, which is now %Y-%m-%d (YYYY-MM-DD) per ISO 8601.
 
+This release intoduces two new configuration options:
+REVERSED_RACKS_LISTSRC and NEAREST_RACKS_CHECKBOX.
+
 [1] http://php.net/manual/en/function.strftime.php
 ENDOFTEXT
 ,
@@ -241,6 +244,7 @@ function getDBUpgradePath ($v1, $v2)
 		'0.20.2',
 		'0.20.3',
 		'0.20.4',
+		'0.20.5',
 	);
 	if (!in_array ($v1, $versionhistory) or !in_array ($v2, $versionhistory))
 		return NULL;
@@ -1644,7 +1648,21 @@ CREATE TABLE `MuninGraph` (
 			$query[] = "UPDATE AttributeValue INNER JOIN AttributeMap USING (attr_id) SET AttributeValue.uint_value = 1572 WHERE chapter_id = 12 AND uint_value = 162";
 			$query[] = "UPDATE AttributeValue INNER JOIN AttributeMap USING (attr_id) SET AttributeValue.uint_value = 1710 WHERE chapter_id = 12 AND uint_value = 163";
 			$query[] = "UPDATE Config SET varvalue = '%Y-%m-%d', description='PHP strftime() format to use for date output' WHERE varname = 'DATETIME_FORMAT'";
+			$query[] = "INSERT INTO `Config` (varname, varvalue, vartype, emptyok, is_hidden, is_userdefined, description) VALUES ('NEAREST_RACKS_CHECKBOX', 'yes', 'string', 'yes', 'no', 'yes', 'Enable nearest racks in port list filter by default')";
 			$query[] = "UPDATE Config SET varvalue = '0.20.4' WHERE varname = 'DB_VERSION'";
+			break;
+		case '0.20.5':
+			// prevent some AttributeMap entries from being deleted
+			$query[] = "ALTER TABLE AttributeMap ADD COLUMN sticky enum('yes','no') default 'no'";
+			$query[] = "UPDATE AttributeMap SET sticky = 'yes' WHERE objtype_id = 4 AND attr_id IN (26,28)"; // Server -> Hypervisor, Slot number
+			$query[] = "UPDATE AttributeMap SET sticky = 'yes' WHERE objtype_id = 8 AND attr_id IN (1,2,4,28)"; // Network switch -> OEM S/N 1, HW type, SW type, Slot number
+			$query[] = "UPDATE AttributeMap SET sticky = 'yes' WHERE objtype_id = 798 AND attr_id = 28"; // Network security -> Slot number
+			$query[] = "UPDATE AttributeMap SET sticky = 'yes' WHERE objtype_id = 1055 AND attr_id = 28"; // FC switch -> Slot number
+			$query[] = "UPDATE AttributeMap SET sticky = 'yes' WHERE objtype_id = 1560 AND attr_id IN (27,29)"; // Rack -> Height, Sort order
+			$query[] = "UPDATE AttributeMap SET sticky = 'yes' WHERE objtype_id = 1787 AND attr_id = 30"; // Management interface -> Mgmt type
+
+			$query[] = "INSERT INTO `Config` (varname, varvalue, vartype, emptyok, is_hidden, is_userdefined, description) VALUES ('RDP_OBJS_LISTSRC','false','string','yes','no','yes','Rackcode filter for RDP-managed objects')";
+			$query[] = "UPDATE Config SET varvalue = '0.20.5' WHERE varname = 'DB_VERSION'";
 			break;
 		case 'dictionary':
 			$query = reloadDictionary();
@@ -1836,6 +1854,7 @@ else
 	else
 	{
 		echo "<tr><th>Upgrade path</th><td>${dbver} &rarr; " . implode (' &rarr; ', $path) . "</td></tr>\n";
+		global $relnotes;
 		foreach ($path as $batchid)
 			if (isset ($relnotes[$batchid]))
 				echo "<tr><th>Release notes for ${batchid}</th><td><pre>" . $relnotes[$batchid] . "</pre></td></tr>\n";
