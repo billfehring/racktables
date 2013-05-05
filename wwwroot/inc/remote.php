@@ -246,6 +246,12 @@ function makeGatewayParams ($object_id, $tolerate_remote_errors, /*array(&)*/$re
 
 	switch ($settings['protocol'])
 	{
+		case 'sshnokey':
+			$params_from_settings['proto'] = 'proto';
+			$params_from_settings['prompt'] = 'prompt';
+			$params_from_settings['prompt-delay'] = 'prompt_delay';
+			$params_from_settings['username'] = 'username';
+			$params_from_settings['password'] = 'password';
 		case 'telnet':
 		case 'netcat':
 			// prepend telnet commands by credentials
@@ -317,7 +323,7 @@ function makeGatewayParams ($object_id, $tolerate_remote_errors, /*array(&)*/$re
 			$params_from_settings[] = $settings['hostname'];
 			break;
 		default:
-			throw RTGatewayError ("Invalid terminal protocol '${settings['protocol']}' specified");
+			throw new RTGatewayError ("Invalid terminal protocol '${settings['protocol']}' specified");
 	}
 
 	foreach ($params_from_settings as $param_name => $setting_name)
