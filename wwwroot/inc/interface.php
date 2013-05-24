@@ -232,16 +232,21 @@ function getRenderedAlloc ($object_id, $alloc)
 		$ret['td_network'] = "<td class='$td_class'>" .
 			getOutputOf ('renderCell', $netinfo) . '</td>';
 
-		// filter out self-allocation
-		loadIPAddrList ($netinfo);
-		$other_routers = array();
-		foreach (findRouters ($netinfo['own_addrlist']) as $router)
-			if ($router['id'] != $object_id)
-				$other_routers[] = $router;
-		if (count ($other_routers))
-			$ret['td_routed_by'] = getOutputOf ('printRoutersTD', $other_routers, getConfigVar ('IPV4_TREE_RTR_AS_CELL'));
+		// render "routed by" td
+		if ($display_routers = (getConfigVar ('IPV4_TREE_RTR_AS_CELL') == 'none'))
+			$ret['td_routed_by'] = '';
 		else
-			$ret['td_routed_by'] = "<td class='$td_class'>&nbsp;</td>";
+		{
+			loadIPAddrList ($netinfo);
+			$other_routers = array();
+			foreach (findRouters ($netinfo['own_addrlist']) as $router)
+				if ($router['id'] != $object_id)
+					$other_routers[] = $router;
+			if (count ($other_routers))
+				$ret['td_routed_by'] = getOutputOf ('printRoutersTD', $other_routers, $display_routers);
+			else
+				$ret['td_routed_by'] = "<td class='$td_class'>&nbsp;</td>";
+		}
 	}
 
 	// render peers td
@@ -372,8 +377,18 @@ function renderRackspace ()
 					continue;
 				$rackListIdx = 0;
 				echo "<tr class=row_${order}><th class=tdleft>";
-				if ($location_id)
-					echo "<a href='".makeHref(array('page'=>'location', 'location_id'=>$location_id))."${cellfilter['urlextra']}'>${row['location_name']}</a>";
+				$locationTree = '';
+				while ($location_id)
+				{
+						$parentLocation = spotEntity ('location', $location_id);
+						$locationTree = "&raquo; <a href='" .
+							makeHref(array('page'=>'location', 'location_id'=>$parentLocation['id'])) .
+							"${cellfilter['urlextra']}'>${parentLocation['name']}</a> " .
+							$locationTree;
+						$location_id = $parentLocation['parent_id'];
+				}
+				$locationTree = substr ($locationTree, 8);
+				echo $locationTree;
 				echo "</th><th class=tdleft><a href='".makeHref(array('page'=>'row', 'row_id'=>$row_id))."${cellfilter['urlextra']}'>${row_name}</a></th>";
 				echo "<th class=tdleft><table border=0 cellspacing=5><tr>";
 				if (!count ($rackList))
@@ -589,7 +604,7 @@ function renderRow ($row_id)
 }
 
 // Used by renderRack()
-function printObjectDetailsForRenderRack ($object_id)
+function printObjectDetailsForRenderRack ($object_id, $hl_obj_id = 0)
 {
 	$objectData = spotEntity ('object', $object_id);
 	if (strlen ($objectData['asset_no']))
@@ -602,16 +617,77 @@ function printObjectDetailsForRenderRack ($object_id)
 		$body = ", visible label is \"${objectData['label']}\"";
 	// Display list of child objects, if any
 	$objectChildren = getEntityRelatives ('children', 'object', $objectData['id']);
+	$slotInfo = $slotData = $slotTitle = array ();
 	if (count($objectChildren) > 0)
 	{
 		foreach ($objectChildren as $child)
+		{
 			$childNames[] = $child['name'];
+			$childData = spotEntity ('object', $child['entity_id']);
+			$attrData = getAttrValues ($child['entity_id']);
+			if ($attrData['28']) // slot number
+			{
+				$slot = $attrData['28']['value'];
+				$slotInfo[$slot] = $child['name'];
+				$slotData[$slot] = $child['entity_id'];
+				if (strlen ($childData['asset_no']))
+					$slotTitle[$slot] = "<div title='${childData['asset_no']}";
+				else
+					$slotTitle[$slot] = "<div title='no asset tag";
+				if (strlen ($childData['label']) and $childData['label'] != $child['name'])
+					$slotTitle[$slot] .= ", visible label is \"${childData['label']}\"";
+				$slotTitle[$slot] .= "'>";
+			}
+		}
 		natsort($childNames);
 		$suffix = sprintf(", contains %s'>", implode(', ', $childNames));
 	}
 	else
 		$suffix = "'>";
 	echo "${prefix}${body}${suffix}" . mkA ($objectData['dname'], 'object', $objectData['id']) . '</div>';
+	if (in_array ($objectData['objtype_id'], array (1502,1503))) // server chassis, network chassis
+	{
+		$objAttr = getAttrValues ($objectData['id']);
+		if (isset ($objAttr[2])) // HW type
+		{
+			extractLayout ($objAttr[2]);
+			if (isset ($objAttr[2]['rows']))
+			{
+				$rows = $objAttr[2]['rows'];
+				$cols = $objAttr[2]['cols'];
+				$layout = $objAttr[2]['layout'];
+				echo "<table width='100%' border='1'>";
+				for ($r = 0; $r < $rows; $r++)
+				{
+					echo '<tr>';
+					for ($c = 0; $c < $cols; $c++)
+					{
+						$s = ($r * $cols) + $c + 1;
+						if (isset ($slotData[$s]))
+						{
+							echo "<td class='state_T";
+							if ($slotData[$s] == $hl_obj_id)
+								echo 'h';
+							echo "'>${slotTitle[$s]}";
+							if ($layout == 'V')
+							{
+								$tmp = substr ($slotInfo[$s], 0, 1);
+								foreach (str_split (substr ($slotInfo[$s],1)) as $letter)
+									$tmp .= '<br>' . $letter;
+								$slotInfo[$s] = $tmp;
+							}
+							echo mkA ($slotInfo[$s], 'object', $slotData[$s]);
+							echo '</div></td>';
+						}
+						else
+							echo "<td class='state_F'><div title=\"Free slot\">&nbsp;</div></td>";
+					}
+					echo '</tr>';
+				}
+				echo '</table>';
+			}
+		}
+	}
 }
 
 // This function renders rack as HTML table.
@@ -622,7 +698,6 @@ function renderRack ($rack_id, $hl_obj_id = 0)
 	markAllSpans ($rackData);
 	if ($hl_obj_id > 0)
 		highlightObject ($rackData, $hl_obj_id);
-	markupObjectProblems ($rackData);
 	$prev_id = getPrevIDforRack ($rackData['row_id'], $rack_id);
 	$next_id = getNextIDforRack ($rackData['row_id'], $rack_id);
 	echo "<center><table border=0><tr valign=middle>";
@@ -656,7 +731,7 @@ function renderRack ($rack_id, $hl_obj_id = 0)
 			switch ($state)
 			{
 				case 'T':
-					printObjectDetailsForRenderRack($rackData[$i][$locidx]['object_id']);
+					printObjectDetailsForRenderRack ($rackData[$i][$locidx]['object_id'], $hl_obj_id);
 					break;
 				case 'A':
 					echo '<div title="This rackspace does not exist">&nbsp;</div>';
@@ -988,7 +1063,6 @@ function renderGridForm ($rack_id, $filter, $header, $submit, $state1, $state2)
 	$rackData = spotEntity ('rack', $rack_id);
 	amplifyCell ($rackData);
 	$filter ($rackData);
-	markupObjectProblems ($rackData);
 
 	// Render the result whatever it is.
 	// Main layout.
@@ -1273,6 +1347,7 @@ function renderObject ($object_id)
 		finishPortlet();
 	}
 
+	renderSLBTriplets2 ($info);
 	renderSLBTriplets ($info);
 	echo "</td>\n";
 
@@ -1296,10 +1371,10 @@ function renderRackMultiSelect ($sname, $racks, $selected)
 	// Transform the given flat list into a list of groups, each representing a rack row.
 	$rdata = array();
 	foreach ($racks as $rack)
-		if (!isset ($rdata[$rack['row_name']]))
-			$rdata[$rack['row_name']] = array ($rack['id'] => $rack['name']);
-		else
-			$rdata[$rack['row_name']][$rack['id']] = $rack['name'];
+	{
+		$row_name = ($rack['location_id']) ? $rack['location_name'] . '/' . $rack['row_name'] : $rack['row_name'];
+		$rdata[$row_name][$rack['id']] = $rack['name'];
+	}
 	echo "<select name=${sname} multiple size=" . getConfigVar ('MAXSELSIZE') . " onchange='getElementsByName(\"updateObjectAllocation\")[0].submit()'>\n";
 	foreach ($rdata as $optgroup => $racklist)
 	{
@@ -2178,7 +2253,7 @@ function renderIPSpaceRecords ($tree, $baseurl, $target = 0, $level = 1)
 			echo "</td>";
 
 			if ($display_routers)
-				printRoutersTD (findRouters ($item['addrlist']), getConfigVar ('IPV4_TREE_RTR_AS_CELL'));
+				printRoutersTD (findRouters ($item['own_addrlist']), getConfigVar ('IPV4_TREE_RTR_AS_CELL'));
 			echo "</tr>";
 			if ($item['symbol'] == 'node-expanded' or $item['symbol'] == 'node-expanded-static')
 				$self ($item['kids'], $baseurl, $target, $level + 1);
@@ -2585,6 +2660,12 @@ function renderIPv4NetworkAddresses ($range)
 			echo $delim . mkA ("${vs['name']}:${vs['vport']}/${vs['proto']}", 'ipv4vs', $vs['id']) . '&rarr;';
 			$delim = '<br>';
 		}
+		foreach ($addr['vsglist'] as $vs_id)
+		{
+			$vs = spotEntity ('ipvs', $vs_id);
+			echo $delim . mkA ($vs['name'], 'ipvs', $vs['id']) . '&rarr;';
+			$delim = '<br>';
+		}
 		foreach ($addr['rsplist'] as $rsp_id)
 		{
 			$rsp = spotEntity ('ipv4rspool', $rsp_id);
@@ -2698,6 +2779,12 @@ function renderIPv6NetworkAddresses ($netinfo)
 			echo $delim . mkA ("${vs['name']}:${vs['vport']}/${vs['proto']}", 'ipv4vs', $vs['id']) . '&rarr;';
 			$delim = '<br>';
 		}
+		foreach ($addr['vsglist'] as $vs_id)
+		{
+			$vs = spotEntity ('ipvs', $vs_id);
+			echo $delim . mkA ($vs['name'], 'ipvs', $vs['id']) . '&rarr;';
+			$delim = '<br>';
+		}
 		foreach ($addr['rsplist'] as $rsp_id)
 		{
 			$rsp = spotEntity ('ipv4rspool', $rsp_id);
@@ -2770,9 +2857,16 @@ function renderIPAddress ($ip_bin)
 	renderEntitySummary ($address, 'summary', $summary);
 
 	// render SLB portlet
-	if (! empty ($address['vslist']) or ! empty ($address['rsplist']))
+	if (! empty ($address['vslist']) or ! empty ($address['vsglist']) or ! empty ($address['rsplist']))
 	{
 		startPortlet ("");
+		if (! empty ($address['vsglist']))
+		{
+			printf ("<h2>virtual service groups (%d):</h2>", count ($address['vsglist']));
+			foreach ($address['vsglist'] as $vsg_id)
+				renderSLBEntityCell (spotEntity ('ipvs', $vsg_id));
+		}
+
 		if (! empty ($address['vslist']))
 		{
 			printf ("<h2>virtual services (%d):</h2>", count ($address['vslist']));
@@ -2812,7 +2906,22 @@ function renderIPAddress ($ip_bin)
 		finishPortlet();
 	}
 
-	if (! empty ($address['vslist']) or ! empty ($address['rsplist']))
+	if (! empty ($address['rsplist']))
+	{
+		startPortlet ("RS pools:");
+		foreach ($address['rsplist'] as $rsp_id)
+		{
+			renderSLBEntityCell (spotEntity ('ipv4rspool', $rsp_id));
+			echo '<br>';
+		}
+		finishPortlet();
+	}
+
+	if (! empty ($address['vsglist']))
+		foreach ($address['vsglist'] as $vsg_id)
+			renderSLBTriplets2 (spotEntity ('ipvs', $vsg_id), FALSE, $ip_bin);
+
+	if (! empty ($address['vslist']))
 		renderSLBTriplets ($address);
 
 	foreach (array ('outpf' => 'departing NAT rules', 'inpf' => 'arriving NAT rules') as $key => $title)
@@ -3173,7 +3282,16 @@ function renderSearchResults ($terms, $summary)
 		else
 		{
 			startPortlet($realm);
-			echo $record;
+			if(is_array ($record))
+			{
+				echo '<table border=0 cellpadding=5 cellspacing=0 align=center class=cooltable>';
+				echo "<tr class=row_odd><td class=tdleft>";
+				renderCell ($record);
+				echo "</td></tr>";
+				echo '</table>';
+			}
+			else
+				echo $record;
 			finishPortlet();
 		}
 	}
@@ -3312,6 +3430,19 @@ function renderSearchResults ($terms, $summary)
 					break;
 				case 'ipv4rspool':
 					startPortlet ("<a href='index.php?page=ipv4slb&tab=rspools'>RS pools</a>");
+					echo '<table border=0 cellpadding=5 cellspacing=0 align=center class=cooltable>';
+					foreach ($what as $cell)
+					{
+						echo "<tr class=row_${order}><td class=tdleft>";
+						renderCell ($cell);
+						echo "</td></tr>";
+						$order = $nextorder[$order];
+					}
+					echo '</table>';
+					finishPortlet();
+					break;
+				case 'ipvs':
+					startPortlet ("<a href='index.php?page=ipv4slb&tab=vs'>VS groups</a>");
 					echo '<table border=0 cellpadding=5 cellspacing=0 align=center class=cooltable>';
 					foreach ($what as $cell)
 					{
@@ -3686,6 +3817,8 @@ function renderLocationPage ($location_id)
 	echo "<td class=pcleft>";
 	$summary = array();
 	$summary['Name'] = $locationData['name'];
+	if (! empty ($locationData['parent_id']))
+		$summary['Parent location'] = mkA ($locationData['parent_name'], 'location', $locationData['parent_id']);
 	$summary['Child locations'] = count($locationData['locations']);
 	$summary['Rows'] = count($locationData['rows']);
 	if ($locationData['has_problems'] == 'yes')
@@ -3704,12 +3837,18 @@ function renderLocationPage ($location_id)
 	renderFilesPortlet ('location', $location_id);
 	echo '</td>';
 
-	// Right column with list of rows
+	// Right column with list of rows and child locations
 	echo '<td class=pcright>';
-	startPortlet ('Rows');
+	startPortlet ('Rows ('. count ($locationData['rows']) . ')');
 	echo "<table border=0 cellspacing=0 cellpadding=5 align=center>\n";
 	foreach ($locationData['rows'] as $row_id => $name)
 		echo '<tr><td>' . mkA ($name, 'row', $row_id) . '</td></tr>';
+	echo "</table>\n";
+	finishPortlet();
+	startPortlet ('Child Locations (' . count ($locationData['locations']) . ')');
+	echo "<table border=0 cellspacing=0 cellpadding=5 align=center>\n";
+	foreach ($locationData['locations'] as $location_id => $name)
+		echo '<tr><td>' . mkA ($name, 'location', $location_id) . '</td></tr>';
 	echo "</table>\n";
 	finishPortlet();
 	echo '</td>';
@@ -4392,12 +4531,12 @@ function renderConfigVarName ($v)
 
 function renderUIConfig ()
 {
-	global $configCache, $nextorder;
+	global $nextorder;
 	startPortlet ('Current configuration');
 	echo '<table class=cooltable border=0 cellpadding=5 cellspacing=0 align=center width="70%">';
 	echo '<tr><th class=tdleft>Option</th><th class=tdleft>Value</th></tr>';
 	$order = 'odd';
-	foreach ($configCache as $v)
+	foreach (loadConfigCache() as $v)
 	{
 		if ($v['is_hidden'] != 'no')
 			continue;
@@ -5195,7 +5334,7 @@ function renderConfigEditor ()
 	printOpFormIntro ('upd');
 
 	$i = 0;
-	foreach ($configCache as $v)
+	foreach ($per_user ? $configCache : loadConfigCache() as $v)
 	{
 		if ($v['is_hidden'] != 'no')
 			continue;
@@ -5283,21 +5422,21 @@ function renderFileLinks ($links)
 	echo "<table cellspacing=0 cellpadding='5' align='center' class='widetable'>\n";
 	foreach ($links as $link)
 	{
+		$cell = spotEntity ($link['entity_type'], $link['entity_id']);
 		echo '<tr><td class=tdleft>';
 		switch ($link['entity_type'])
 		{
 			case 'user':
 			case 'ipv4net':
 			case 'rack':
+			case 'ipvs':
 			case 'ipv4vs':
 			case 'ipv4rspool':
 			case 'object':
-				renderCell (spotEntity ($link['entity_type'], $link['entity_id']));
+				renderCell ($cell);
 				break;
 			default:
-				echo formatEntityName ($link['entity_type']) . ': ';
-				echo "<a href='" . makeHref(array('page'=>$link['page'], $link['id_name']=>$link['entity_id']));
-				echo "'>${link['name']}</a>";
+				echo formatRealmName ($link['entity_type']) . ': ' . mkCellA ($cell);
 				break;
 		}
 		echo '</td></tr>';
@@ -5533,7 +5672,7 @@ function printRoutersTD ($rlist, $as_cell = 'yes')
 		if ($as_cell == 'yes')
 			renderRouterCell ($rtr['ip_bin'], $rtr['iface'], $rinfo);
 		else
-			echo $pfx . mkA ($rinfo['dname'], 'object', $rinfo['id']);
+			echo $pfx . '<a href="' . makeHref (array ('page' => 'object', 'object_id' => $rtr['id'], 'tab' => 'default', 'hl_ip' => ip_format ($rtr['ip_bin']))) . '">' . $rinfo['dname'] . '</a>';
 		$pfx = "<br>\n";
 	}
 	echo '</td>';
@@ -5652,6 +5791,7 @@ function renderCell ($cell)
 		echo "</td></tr></table>";
 		break;
 	case 'ipv4vs':
+	case 'ipvs':
 	case 'ipv4rspool':
 		renderSLBEntityCell ($cell);
 		break;
@@ -5804,8 +5944,9 @@ function showPathAndSearch ($pageno, $tabno)
 		$self = __FUNCTION__;
 		global $page;
 		$path = array();
+		$page_name = preg_replace ('/:.*/', '', $targetno);
 		// Recursion breaks at first parentless page.
-		if ($targetno == 'ipaddress')
+		if ($page_name == 'ipaddress')
 		{
 			// case ipaddress is a universal v4/v6 page, it has two parents and requires special handling
 			$ip_bin = ip_parse ($_REQUEST['ip']);
@@ -5813,22 +5954,28 @@ function showPathAndSearch ($pageno, $tabno)
 			$path = $self ($parent);
 			$path[] = $targetno;
 		}
-		elseif (!isset ($page[$targetno]['parent']))
+		elseif (!isset ($page[$page_name]['parent']))
 			$path = array ($targetno);
 		else
 		{
-			$path = $self ($page[$targetno]['parent']);
+			$path = $self ($page[$page_name]['parent']);
 			$path[] = $targetno;
 		}
 		return $path;
 	}
-	global $page;
+	global $page, $tab;
 	// Path.
 	$path = getPath ($pageno);
 	$items = array();
 	foreach (array_reverse ($path) as $no)
 	{
-		if (isset ($page[$no]['title']))
+		if (preg_match ('/(.*):(.*)/', $no, $m) && isset ($tab[$m[1]][$m[2]]))
+			$title = array
+			(
+				'name' => $tab[$m[1]][$m[2]],
+				'params' => array('page' => $m[1], 'tab' => $m[2]),
+			);
+		elseif (isset ($page[$no]['title']))
 			$title = array
 			(
 				'name' => $page[$no]['title'],
@@ -5954,6 +6101,13 @@ function dynamic_title_decoder ($path_position)
 		return array
 		(
 			'name' => $vs_info['dname'],
+			'params' => array ('vs_id' => $vs_info['id'])
+		);
+	case 'ipvs':
+		$vs_info = spotEntity ('ipvs', assertUIntArg ('vs_id'));
+		return array
+		(
+			'name' => $vs_info['name'],
 			'params' => array ('vs_id' => $vs_info['id'])
 		);
 	case 'object':
@@ -8442,7 +8596,7 @@ function renderEditVlan ($vlan_ck)
 	if ($portc)
 	{
 		$clear_line .= '<p>';
-		$clear_line .= getOpLink (array ('op' => 'clear'), 'remove', 'clear', "remove this VLAN from $portc ports") . 
+		$clear_line .= getOpLink (array ('op' => 'clear'), 'remove', 'clear', "remove this VLAN from $portc ports") .
 			' this VLAN from ' . mkA ("${portc} ports", 'vlan', $vlan_ck);
 	}
 

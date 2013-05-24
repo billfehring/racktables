@@ -188,6 +188,22 @@ REVERSED_RACKS_LISTSRC and NEAREST_RACKS_CHECKBOX.
 [1] http://php.net/manual/en/function.strftime.php
 ENDOFTEXT
 ,
+
+	'0.20.5' => <<<ENDOFTEXT
+This release introduces the VS groups feature. VS groups is a new way to store
+and display virtual services configuration. New realm 'ipvs' (VS group) is created.
+All the existing VS configuration is kept and displayed as-is, but user is free to convert
+it to the new format, which displays it in more natural way and allows to generate
+virtual_server_group keepalived configs. To convert a virtual servise to the new format,
+you need to manually create the vs group object and assign IP addresses to it. Then, if you
+have the old-style VSes configured, the Migrate tab will be displayed on the particular VS group's
+page. After successfull migration, you can remove the old-style VS objects.
+
+Old-style VS configuration becomes DEPRECATED. Its support will be removed in one of the following
+major releases. So it is strongly recommended to convert it to the new format.
+ENDOFTEXT
+,
+
 );
 
 // At the moment we assume, that for any two releases we can
@@ -1652,6 +1668,26 @@ CREATE TABLE `MuninGraph` (
 			$query[] = "UPDATE Config SET varvalue = '0.20.4' WHERE varname = 'DB_VERSION'";
 			break;
 		case '0.20.5':
+			$query[] = "
+CREATE OR REPLACE VIEW `Rack` AS SELECT O.id, O.name AS name, O.asset_no, O.has_problems, O.comment,
+  AV_H.uint_value AS height,
+  AV_S.uint_value AS sort_order,
+  RT.thumb_data,
+  R.id AS row_id,
+  R.name AS row_name,
+  L.id AS location_id,
+  L.name AS location_name
+  FROM `Object` O
+  LEFT JOIN `AttributeValue` AV_H ON O.id = AV_H.object_id AND AV_H.attr_id = 27
+  LEFT JOIN `AttributeValue` AV_S ON O.id = AV_S.object_id AND AV_S.attr_id = 29
+  LEFT JOIN `RackThumbnail` RT ON O.id = RT.rack_id
+  LEFT JOIN `EntityLink` RL ON O.id = RL.child_entity_id  AND RL.parent_entity_type = 'row' AND RL.child_entity_type = 'rack'
+  INNER JOIN `Object` R ON R.id = RL.parent_entity_id
+  LEFT JOIN `EntityLink` LL ON R.id = LL.child_entity_id AND LL.parent_entity_type = 'location' AND LL.child_entity_type = 'row'
+  LEFT JOIN `Object` L ON L.id = LL.parent_entity_id
+  WHERE O.objtype_id = 1560
+";
+
 			// prevent some AttributeMap entries from being deleted
 			$query[] = "ALTER TABLE AttributeMap ADD COLUMN sticky enum('yes','no') default 'no'";
 			$query[] = "UPDATE AttributeMap SET sticky = 'yes' WHERE objtype_id = 4 AND attr_id IN (26,28)"; // Server -> Hypervisor, Slot number
@@ -1662,6 +1698,78 @@ CREATE TABLE `MuninGraph` (
 			$query[] = "UPDATE AttributeMap SET sticky = 'yes' WHERE objtype_id = 1787 AND attr_id = 30"; // Management interface -> Mgmt type
 
 			$query[] = "INSERT INTO `Config` (varname, varvalue, vartype, emptyok, is_hidden, is_userdefined, description) VALUES ('RDP_OBJS_LISTSRC','false','string','yes','no','yes','Rackcode filter for RDP-managed objects')";
+
+			// SLB v2 tables
+			$query[] = "
+CREATE TABLE `VS` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `name` char(255) DEFAULT NULL,
+  `vsconfig` text,
+  `rsconfig` text,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB
+";
+			$query[] = "
+CREATE TABLE `VSIPs` (
+  `vs_id` int(10) unsigned NOT NULL,
+  `vip` varbinary(16) NOT NULL,
+  `vsconfig` text,
+  `rsconfig` text,
+  PRIMARY KEY (`vs_id`,`vip`),
+  KEY `vip` (`vip`),
+  CONSTRAINT `VSIPs-vs_id` FOREIGN KEY (`vs_id`) REFERENCES `VS` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB
+";
+			$query[] = "
+CREATE TABLE `VSPorts` (
+  `vs_id` int(10) unsigned NOT NULL,
+  `proto` enum('TCP','UDP','MARK') NOT NULL,
+  `vport` int(10) unsigned NOT NULL,
+  `vsconfig` text,
+  `rsconfig` text,
+  PRIMARY KEY (`vs_id`,`proto`,`vport`),
+  KEY `proto-vport` (`proto`,`vport`),
+  CONSTRAINT `VS-vs_id` FOREIGN KEY (`vs_id`) REFERENCES `VS` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB
+";
+			$query[] = "
+CREATE TABLE `VSEnabledIPs` (
+  `object_id` int(10) unsigned NOT NULL,
+  `vs_id` int(10) unsigned NOT NULL,
+  `vip` varbinary(16) NOT NULL,
+  `rspool_id` int(10) unsigned NOT NULL,
+  `prio` varchar(255) DEFAULT NULL,
+  `vsconfig` text,
+  `rsconfig` text,
+  PRIMARY KEY (`object_id`,`vs_id`,`vip`,`rspool_id`),
+  KEY `vip` (`vip`),
+  KEY `VSEnabledIPs-FK-vs_id-vip` (`vs_id`,`vip`),
+  KEY `VSEnabledIPs-FK-rspool_id` (`rspool_id`),
+  CONSTRAINT `VSEnabledIPs-FK-rspool_id` FOREIGN KEY (`rspool_id`) REFERENCES `IPv4RSPool` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `VSEnabledIPs-FK-vs_id-vip` FOREIGN KEY (`vs_id`, `vip`) REFERENCES `VSIPs` (`vs_id`, `vip`) ON DELETE CASCADE
+) ENGINE=InnoDB
+";
+			$query[] = "
+CREATE TABLE `VSEnabledPorts` (
+  `object_id` int(10) unsigned NOT NULL,
+  `vs_id` int(10) unsigned NOT NULL,
+  `proto` enum('TCP','UDP','MARK') NOT NULL,
+  `vport` int(10) unsigned NOT NULL,
+  `rspool_id` int(10) unsigned NOT NULL,
+  `vsconfig` text,
+  `rsconfig` text,
+  PRIMARY KEY (`object_id`,`vs_id`,`proto`,`vport`,`rspool_id`),
+  KEY `VSEnabledPorts-FK-vs_id-proto-vport` (`vs_id`,`proto`,`vport`),
+  KEY `VSEnabledPorts-FK-rspool_id` (`rspool_id`),
+  CONSTRAINT `VSEnabledPorts-FK-object_id` FOREIGN KEY (`object_id`) REFERENCES `Object` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `VSEnabledPorts-FK-rspool_id` FOREIGN KEY (`rspool_id`) REFERENCES `IPv4RSPool` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `VSEnabledPorts-FK-vs_id-proto-vport` FOREIGN KEY (`vs_id`, `proto`, `vport`) REFERENCES `VSPorts` (`vs_id`, `proto`, `vport`) ON DELETE CASCADE
+) ENGINE=InnoDB
+";
+			$query[] = "ALTER TABLE `EntityLink` MODIFY COLUMN `parent_entity_type` ENUM('ipv4net','ipv4rspool','ipv4vs','ipv6net','location','object','rack','row','user') NOT NULL";
+			$query[] = "ALTER TABLE `FileLink` MODIFY COLUMN `entity_type` ENUM('ipv4net','ipv4rspool','ipv4vs','ipv6net','location','object','rack','row','user') NOT NULL DEFAULT 'object'";
+			$query[] = "ALTER TABLE `TagStorage` MODIFY COLUMN `entity_realm` ENUM('file','ipv4net','ipv4rspool','ipv4vs','ipvs','ipv6net','location','object','rack','user','vst') NOT NULL DEFAULT 'object'";
+			$query[] = "ALTER TABLE `UserConfig` DROP FOREIGN KEY `UserConfig-FK-user`";
 			$query[] = "UPDATE Config SET varvalue = '0.20.5' WHERE varname = 'DB_VERSION'";
 			break;
 		case 'dictionary':

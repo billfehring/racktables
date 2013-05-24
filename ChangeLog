@@ -5,6 +5,13 @@
 		was not associated with a cluster (#823)
 	bugfix: contained objects were displayed without container's rackspace
 		allocation information (#825)
+	bugfix: when mounting an object, list of racks was improperly grouped if
+		duplicate row names existed (#839)
+	bugfix: invalid search result when only one location matched (#843)
+	bugfix: when there's no local account created while using LDAP auth,
+		quick links can't be saved on that account (#831)
+	bugfix: ip tree: "Routed by" column displays routers in aggregate networks (#773)
+	bugfix: user-overrided config values were displayed in global config editor form
 	update: search improvements:
 		- redirect to object when search by IP lead to valid allocation
 		- if search result is same type of object, preserve opened tab
@@ -14,8 +21,13 @@
 	update: prevent deletion of system-level attribute mappings (#771)
 	update: prevent deletion of object container compatibility rules
 		which are being used (#835)
-	update: use the monospace font family when displaying comments (#781) 
+	update: use the monospace font family when displaying comments (#781)
+	update: display parent locations when browsing rackspace (#845)
+	update: display parent and child location(s) on View Location page (#847)
+	update: display blades when rendering a rack (#745)
 	new feature: Rackcode filter for RDP-managed objects (#819)
+	new feature: grouping of Virtual services, generating of
+		virtual_server_group-aware keepalived configs
 0.20.4 2013-04-15
 	bugfix: %GPASS% dictionary markers were ignored in selectboxes
 	bugfix: 802.1Q: better Force10 switches support
