@@ -430,9 +430,27 @@ $iftable_processors['catalyst-stack-any-1000T'] = array
 	'try_next_proc' => FALSE,
 );
 
+$iftable_processors['catalyst-stack-any-100TX'] = array
+(
+	'pattern' => '@^FastEthernet(\d+)/(\d+)/(\d+)$@',
+	'replacement' => 'fa\\1/\\2/\\3',
+	'dict_key' => 19,
+	'label' => 'unit \\1 port \\3',
+	'try_next_proc' => FALSE,
+);
+
 $iftable_processors['catalyst-stack-25-to-28-SFP'] = array
 (
 	'pattern' => '@^GigabitEthernet(\d+)/(\d+)/(25|26|27|28)$@',
+	'replacement' => 'gi\\1/\\2/\\3',
+	'dict_key' => '4-1077',
+	'label' => 'unit \\1 port \\3',
+	'try_next_proc' => FALSE,
+);
+
+$iftable_processors['catalyst-stack-1-to-4-SFP'] = array
+(
+	'pattern' => '@^GigabitEthernet(\d+)/(\d+)/([1-4])$@',
 	'replacement' => 'gi\\1/\\2/\\3',
 	'dict_key' => '4-1077',
 	'label' => 'unit \\1 port \\3',
@@ -1675,6 +1693,18 @@ $known_switches = array // key is system OID w/o "enterprises" prefix
 		'text' => 'WS-C2960G-24TS-S: 24 RJ-45/10-100-1000T(X)',
 		'processors' => array ('catalyst-chassis-25-to-26-1000SFP', 'catalyst-chassis-mgmt', 'catalyst-chassis-any-1000T'),
 	),
+	'9.1.1265' => array
+	(
+		'dict_key' => 1394,
+		'text' => 'WS-C2960S-24PS-L: 24 RJ-45/10-100-1000T(X) + 4 SFP/1000',
+		'processors' => array ('catalyst-stack-1-to-4-SFP', 'catalyst-chassis-mgmt', 'catalyst-stack-any-100'),
+	),
+	'9.1.1650' => array
+	(
+		'dict_key' => 1903,
+		'text' => 'WS-C2960S-F48LPS-L: 48 RJ-45/10-100TX + 4 SFP/1000',
+		'processors' => array ('catalyst-stack-1-to-4-SFP', 'catalyst-chassis-mgmt', 'catalyst-stack-any-100TX'),
+	),
 	'9.1.799' => array
 	(
 		'dict_key' => 168,
@@ -1783,6 +1813,18 @@ $known_switches = array // key is system OID w/o "enterprises" prefix
 		'text' => 'WS-C3560-48PS: 48 RJ-45/10-100TX + 4 SFP/1000',
 		'processors' => array ('catalyst-chassis-any-1000SFP', 'catalyst-chassis-any-100TX'),
 	),
+	'9.1.569' => array
+	(
+		'dict_key' => 2024,
+		'text' => 'Cisco 877 ISR: 4 RJ-45/10-100TX',
+		'processors' => array ('catalyst-chassis-any-100TX'),
+	),
+	'9.1.570' => array
+	(
+		'dict_key' => 2025,
+		'text' => 'Cisco 878 ISR: 4 RJ-45/10-100TX',
+		'processors' => array ('catalyst-chassis-any-100TX'),
+	),
 	'9.1.1025' => array
 	(
 		'dict_key' => 1807,
@@ -1824,6 +1866,12 @@ $known_switches = array // key is system OID w/o "enterprises" prefix
 		'dict_key' => 377,
 		'text' => 'WS-C4948-10GE: 48 RJ-45/10-100-1000T(X) + 2 X2/10000 + 1 RJ-45/100TX (OOB mgmt)',
 		'processors' => array ('catalyst-chassis-uplinks-10000X2', 'catalyst-chassis-uplinks-1000T', 'catalyst-chassis-mgmt'),
+	),
+	'9.1.1327' => array
+	(
+		'dict_key' => 2026,
+		'text' => 'WS-C4948E: 48 RJ-45/10-100-1000T(X) + 4 SFP+/10000 + 1 RJ-45/100TX (OOB mgmt)',
+		'processors' => array ('catalyst-chassis-uplinks-10000SFP+', 'catalyst-chassis-uplinks-1000T', 'catalyst-chassis-mgmt'),
 	),
 	'9.1.428' => array
 	(
@@ -2679,8 +2727,9 @@ function doSNMPmining ($object_id, $snmpsetup)
 
 	switch ($objectInfo['objtype_id'])
 	{
-	case 7:
-	case 8:
+	case 7:   // Router
+	case 8:   // Network switch
+	case 965: // Wireless
 		$device = new RTSNMPDevice ($endpoints[0], $snmpsetup);
 		return doSwitchSNMPmining ($objectInfo, $device);
 	case 2:

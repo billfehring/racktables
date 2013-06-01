@@ -1615,7 +1615,7 @@ function commitUpdatePort ($object_id, $port_id, $port_name, $port_type_id, $por
 				'type' => $port_type_id,
 				'label' => $port_label,
 				'reservation_comment' => $reservation_comment,
-				'l2address' => ($db_l2address === '') ? NULL : $db_l2address,
+				'l2address' => nullEmptyStr ($db_l2address),
 			),
 			array
 			(
@@ -2422,7 +2422,7 @@ function updateAddress ($ip_bin, $name = '', $reserved = 'no', $comment)
 	}
 
 	// compute update log message
-	$result = usePreparedSelectBlade ("SELECT name, comment FROM $table WHERE ip = ?", array ($db_ip));
+	$result = usePreparedSelectBlade ("SELECT name, comment, reserved FROM $table WHERE ip = ?", array ($db_ip));
 	$old_name = '';
 	$old_comment = '';
 	if ($row = $result->fetch (PDO::FETCH_ASSOC))
@@ -2434,6 +2434,8 @@ function updateAddress ($ip_bin, $name = '', $reserved = 'no', $comment)
 	// If the 'comment' argument was specified when this function was called, use it.
 	// If not, retain the old value.
 	$comment = (func_num_args () == 4 ) ? $comment : $old_comment;
+	$new_row = array ('name' => $name, 'comment' => $comment, 'reserved' => $reserved);
+	$new_row_empty = !($name != '' or $comment != '' or $reserved != 'no');
 
 	unset ($result);
 	$messages = array ();
@@ -2456,9 +2458,12 @@ function updateAddress ($ip_bin, $name = '', $reserved = 'no', $comment)
 			$messages[] = "comment changed from '$old_comment' to '$comment'";
 	}
 
-	usePreparedDeleteBlade ($table, array ('ip' => $db_ip));
+	if ($row && ! $new_row_empty && $row == $new_row)
+		return;
+	if ($row)
+		usePreparedDeleteBlade ($table, array ('ip' => $db_ip));
 	// INSERT may appear not necessary.
-	if ($name != '' or $comment != '' or $reserved != 'no')
+	if (! $new_row_empty)
 		usePreparedInsertBlade
 		(
 			$table,
@@ -3570,9 +3575,16 @@ function commitUpdateAttrValue ($object_id, $attr_id, $value = '')
 	global $object_attribute_cache;
 	if (isset ($object_attribute_cache[$object_id]))
 		unset ($object_attribute_cache[$object_id]);
-	$result = usePreparedSelectBlade ('select type as attr_type from Attribute where id = ?', array ($attr_id));
-	$row = $result->fetch (PDO::FETCH_NUM);
-	$attr_type = $row[0];
+	$result = usePreparedSelectBlade
+	(
+		"SELECT type AS attr_type, av.* FROM Attribute a " .
+		"LEFT JOIN AttributeValue av ON a.id = av.attr_id AND av.object_id = ?" .
+		"WHERE a.id = ?",
+		array ($object_id, $attr_id)
+	);
+	if (! $row = $result->fetch (PDO::FETCH_ASSOC))
+		throw new InvalidArgException ('$attr_id', $attr_id, 'No such attribute #'.$attr_id);
+	$attr_type = $row['attr_type'];
 	unset ($result);
 	switch ($attr_type)
 	{
@@ -3588,22 +3600,29 @@ function commitUpdateAttrValue ($object_id, $attr_id, $value = '')
 		default:
 			throw new InvalidArgException ('$attr_type', $attr_type, 'Unknown attribute type found in object #'.$object_id.', attribute #'.$attr_id);
 	}
-	usePreparedDeleteBlade ('AttributeValue', array ('object_id' => $object_id, 'attr_id' => $attr_id));
-	if ($value == '')
-		return;
-
-	$type_id = getObjectType ($object_id);
-	usePreparedInsertBlade
-	(
-		'AttributeValue',
-		array
+	if (isset ($row['attr_id']))
+	{
+		// AttributeValue row present in table
+		if ($value == '')
+			usePreparedDeleteBlade ('AttributeValue', array ('object_id' => $object_id, 'attr_id' => $attr_id));
+		else
+			usePreparedUpdateBlade ('AttributeValue', array ($column => $value), array ('object_id' => $object_id, 'attr_id' => $attr_id));
+	}
+	elseif ($value != '')
+	{
+		$type_id = getObjectType ($object_id);
+		usePreparedInsertBlade
 		(
-			$column => $value,
-			'object_id' => $object_id,
-			'object_tid' => $type_id,
-			'attr_id' => $attr_id,
-		)
-	);
+			'AttributeValue',
+			array
+			(
+				$column => $value,
+				'object_id' => $object_id,
+				'object_tid' => $type_id,
+				'attr_id' => $attr_id,
+			)
+		);
+	}
 }
 
 function convertPDOException ($e)
